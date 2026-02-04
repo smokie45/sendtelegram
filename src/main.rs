@@ -2,15 +2,13 @@
 //!
 //! A small tool to send messages to a private Telegram chat.
 //!
-//! TODO: use one dict / struct to keep opts. Forward to cmdargs and cfgfile
-//!         - use hashmap, add keys from main
-//!         - filearg will parse and add value on match
 pub mod cfgfile;
 pub mod cmdargs;
 
 use curl::easy::Easy;
-use log::{debug, info, warn};
+use log::{debug, warn};
 use percent_encoding::{percent_encode, NON_ALPHANUMERIC};
+use std::collections::HashMap;
 use std::io::{stdout, Read, Write};
 
 fn main() {
@@ -20,27 +18,42 @@ fn main() {
         .init()
         .unwrap();
 
-    let options = cmdargs::parse().expect("Error, parsing cmdargs.");
-    // print the options struct using the debug trait
-    debug!("Options: {options:?}");
+    let mut opts = HashMap::<String, String>::new();
+    opts.insert(
+        String::from("cfgfile"),
+        String::from("/etc/sendtelegram.cfg"),
+    );
+    opts.insert(String::from("msg"), String::from("I wanna chat ..."));
 
-    let opts = cfgfile::parse(&options.cfgfile);
+    cmdargs::parse(&mut opts);
+
+    cfgfile::parse(&mut opts);
+    // print the options struct using the debug trait
     debug!("Opts: {opts:?}");
 
     let mut data = String::from("chat_id=");
-    data.push_str(&opts.chat);
+    data.push_str(opts.get("CHAT").expect("Error, no CHAT ID"));
     data.push_str("&disable_notification=false");
     data.push_str("&text=");
-    match options.icon {
+    // match options.icon {
+    match opts.get("icon") {
         // if we have an icon, add it
-        Some(icon) => data.push(icon),
+        Some(icon) => data.push_str(icon),
         None => (), // else do nothing
     }
     // escape and add message
-    data.push_str(&percent_encode(options.msg.as_bytes(), NON_ALPHANUMERIC).to_string());
+    data.push_str(
+        &percent_encode(
+            opts.get("msg")
+                .expect("Error, no message to send.")
+                .as_bytes(),
+            NON_ALPHANUMERIC,
+        )
+        .to_string(),
+    );
 
     let mut url = String::from("https://api.telegram.org/bot");
-    url.push_str(&opts.api);
+    url.push_str(opts.get("API").expect("Error, no API key"));
     url.push_str("/sendMessage");
 
     debug!("URL = '{}'", url);
@@ -55,10 +68,7 @@ fn main() {
 
     // callback to read data to send to server
     transfer
-        .read_function(|buf| {
-            Ok(data.as_bytes().read(buf).unwrap())
-            // Ok(data.read(buf).unwrap_or(0))
-        })
+        .read_function(|buf| Ok(data.as_bytes().read(buf).unwrap()))
         .unwrap();
 
     // callback to read response send by server
@@ -66,8 +76,10 @@ fn main() {
         .write_function(|data| Ok(stdout().write(data).unwrap()))
         .unwrap();
 
-    if !options.nosend {
-        transfer.perform().unwrap();
+    // if !options.nosend {
+    match opts.get("nosend") {
+        None => transfer.perform().unwrap(),
+        Some(_) => warn!("Warning, not sending !"),
     }
     println!("");
 }

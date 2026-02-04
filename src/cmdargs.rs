@@ -2,19 +2,6 @@ use std::collections::HashMap;
 use std::env;
 use std::io::{IsTerminal, Read};
 
-/// struct to maintain all possible options
-#[derive(Debug)] // allow debug print
-pub struct Options {
-    /// The message to send to Telegram.
-    pub msg: String,
-    /// A unicode icon the message shall be prefixed with
-    pub icon: Option<char>,
-    /// If true, no sending will be triggered. Helps debugging.
-    pub nosend: bool,
-    /// Path to the configuration file
-    pub cfgfile: String,
-}
-
 /// Print help text describing all options
 fn show_help() {
     println!("Send notifications to a telegram channel");
@@ -25,24 +12,18 @@ fn show_help() {
     println!("          -m TEXT      The message to send");
     println!("          -c CATEGORY  A category /icon");
     println!("          -n           Debug - don't send");
-    println!("          -f           Configuration file (Default: /etc/sendTelegram.cfg)");
+    println!("          -f           Configuration file (Default: /etc/sendtelegram.cfg)");
     println!();
     println!("Talking with Telegram requires a private API key and CHAT ID. Both shall be defined");
-    println!("in a configuration file, by default expected at '/etc/sendTelegram.cfg'");
-    println!("The message to send can also be provided via STDIN to sendTelegram.");
+    println!("in a configuration file, by default expected at '/etc/sendtelegram.cfg'");
+    println!("The message to send can also be provided via STDIN to sendtelegram.");
     println!("Use RUST_LOG=[info, debug, ...] env to enable logging.");
 }
 
 /// Parse all cmdline arguments and return a struct of options.
 ///
 /// Convert a textual category argument into a UTF icon.
-pub fn parse() -> Option<Options> {
-    let mut opts = Options {
-        msg: String::from("Default message"),
-        icon: None,
-        nosend: false,
-        cfgfile: String::from("/etc/sendTelegram.cfg"),
-    };
+pub fn parse(opts: &mut HashMap<String, String>) {
     let mut icons = HashMap::new();
     icons.insert(String::from("Bell"), '🔔');
     icons.insert(String::from("Watch"), '⌚');
@@ -52,7 +33,7 @@ pub fn parse() -> Option<Options> {
     if !std::io::stdin().is_terminal() {
         let mut tmp = String::new();
         std::io::stdin().read_to_string(&mut tmp).expect("ERROR");
-        opts.msg = tmp.trim().to_string().clone();
+        opts.insert(String::from("msg"), tmp);
     }
 
     let mut args = env::args();
@@ -67,7 +48,10 @@ pub fn parse() -> Option<Options> {
                     Some(icon) => {
                         // fetch unicode icon for given string and store in options stuct
                         // We keep Option<char> provided by get(), so not using unwrap()
-                        opts.icon = icons.get(icon.as_str()).copied();
+                        opts.insert(
+                            String::from("icon"),
+                            icons.get(icon.as_str()).unwrap().to_string(),
+                        );
                     }
                     None => println!("Warnng, no argument for category found. Ignoring it."),
                 }
@@ -76,17 +60,17 @@ pub fn parse() -> Option<Options> {
                 // is imessage option. Fetch value
                 match args.next() {
                     Some(msg) => {
-                        opts.msg = String::from(msg.as_str());
+                        opts.insert(String::from("msg"), msg);
                     }
                     None => println!("Warning, no argument for message found. Ignoring it."),
                 }
             }
             "-n" => {
-                opts.nosend = true;
+                opts.insert(String::from("nosend"), String::from("true"));
             }
             "-f" => match args.next() {
                 Some(cfgfile) => {
-                    opts.cfgfile = String::from(cfgfile.as_str());
+                    opts.insert(String::from("cfgfile"), String::from(cfgfile.as_str()));
                 }
                 None => println!("Warning, no filename for '-f' option found. Using default."),
             },
@@ -99,5 +83,4 @@ pub fn parse() -> Option<Options> {
             }
         }
     }
-    Some(opts) // return options struct to caller
 }
