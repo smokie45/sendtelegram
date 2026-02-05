@@ -11,6 +11,7 @@ fn show_help() {
     println!("Options:");
     println!("          -m TEXT      The message to send");
     println!("          -c CATEGORY  A category /icon");
+    println!("          -v           verbose");
     println!("          -n           Debug - don't send");
     println!("          -f           Configuration file (Default: /etc/sendtelegram.cfg)");
     println!();
@@ -67,6 +68,9 @@ pub fn parse(opts: &mut HashMap<String, String>) {
             }
             "-n" => {
                 opts.insert(String::from("nosend"), String::from("true"));
+            }
+            "-v" => {
+                opts.insert(String::from("verbose"), String::from("true"));
             }
             "-f" => match args.next() {
                 Some(cfgfile) => {
